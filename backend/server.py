@@ -1,3 +1,13 @@
+# ======================================================
+# ScamShield Backend – Server
+# ------------------------------------------------------
+# Author: Ayesha Habib
+# Description:
+#   Main FastAPI application that handles scam detection,
+#   database connections, and API endpoints.
+# ======================================================
+
+
 from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -168,7 +178,15 @@ def apply_rule_layer(content: str, scan_type: str) -> tuple[int, List[str]]:
     return min(score, 70), triggers  # Cap rule score at 70
 
 async def apply_blacklist_layer(content: str, scan_type: str) -> tuple[int, List[str]]:
-    """Check against MongoDB blacklists"""
+    # ======================================================
+# ScamShield Backend – Server
+# ------------------------------------------------------
+# Author: Ayesha Habib
+# Description:
+#   Main FastAPI application that handles scam detection,
+#   database connections, and API endpoints.
+# ======================================================
+
     score = 0
     triggers = []
     
@@ -469,4 +487,9 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_db_client():
     """Close database connection on shutdown"""
-    client.close()
+    client.close()  
+
+    # End of server.py
+# Notes:
+#   Future plans include adding user authentication,
+#   rate-limiting, and improved AI-based detection.
