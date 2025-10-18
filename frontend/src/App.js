@@ -1,3 +1,12 @@
+// =========================================================
+// ScamShield Frontend — App Entry
+// Author: Ayesha Habib
+// Description: 
+//   Main React component serving as the entry point
+//   for ScamShield’s user interface.
+// =========================================================
+
+
 import React, { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import axios from "axios";
