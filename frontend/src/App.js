@@ -6,6 +6,7 @@
 //   for ScamShield’s user interface.
 // =========================================================
 
+import ScannerInput from "./components/ScannerInput";
 
 import React, { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
@@ -490,21 +491,13 @@ const StatsPage = () => {
 
 // Main App Component
 const App = () => {
+  function App() {
   return (
-    <div className="min-h-screen bg-slate-50">
-      <BrowserRouter>
-        <Navigation />
-        <main>
-          <Routes>
-            <Route path="/" element={<Scanner />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/stats" element={<StatsPage />} />
-          </Routes>
-        </main>
-        <Toaster />
-      </BrowserRouter>
+    <div className="App">
+      <ScannerInput />
     </div>
   );
-};
+}
+
 
 export default App;
