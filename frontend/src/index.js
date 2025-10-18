@@ -5,6 +5,7 @@
 //   the App component into the root DOM node.
 // =========================================================
 
+import "./theme.css";
 
 import React from "react";
 import ReactDOM from "react-dom/client";
