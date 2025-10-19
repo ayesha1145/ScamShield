@@ -1,0 +1,26 @@
+/* ==========================================================
+   RiskResult Component Styles
+   ========================================================== */
+
+.risk-result {
+  padding: 16px;
+  margin-top: 20px;
+  border-left: 8px solid;
+  transition: 0.2s ease;
+}
+
+.safe {
+  border-color: var(--color-safe);
+  background-color: #e6f7ec;
+}
+
+.suspicious {
+  border-color: var(--color-suspicious);
+  background-color: #fff7e6;
+}
+
+.dangerous {
+  border-color: var(--color-dangerous);
+  background-color: #ffe6e6;
+}
+
