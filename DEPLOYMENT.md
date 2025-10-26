@@ -1,6 +1,6 @@
 # ScamShield Deployment Guide 🚀
 
-This guide provides comprehensive instructions for deploying ScamShield locally and on Emergent Cloud.
+This guide provides comprehensive instructions for deploying ScamShield locally and on  Cloud.
 
 ## 📋 Prerequisites
 
@@ -139,11 +139,11 @@ curl -X POST http://localhost:8001/api/scan \
 curl http://localhost:3000
 ```
 
-## ☁️ Emergent Cloud Deployment
+## ☁️  Cloud Deployment
 
 ### 1. Platform Overview
 
-**Emergent Cloud** provides a fully-managed container platform optimized for full-stack applications with:
+** Cloud** provides a fully-managed container platform optimized for full-stack applications with:
 - Automatic MongoDB provisioning
 - Built-in load balancing
 - SSL certificate management
@@ -153,7 +153,7 @@ curl http://localhost:3000
 ### 2. Account Setup
 
 ```bash
-# Create Emergent account at https://emergent.sh
+# Create  account at https://.sh
 # Navigate to dashboard
 # Click "New Project"
 ```
@@ -167,7 +167,7 @@ curl http://localhost:3000
 
 #### B. Environment Configuration
 ```yaml
-# emergent.yaml (automatically detected)
+# .yaml (automatically detected)
 name: scamshield
 services:
   backend:
@@ -179,7 +179,7 @@ services:
     start:
       command: "uvicorn server:app --host 0.0.0.0 --port 8001"
     env:
-      MONGO_URL: "${EMERGENT_MONGO_URL}"
+      MONGO_URL: "${_MONGO_URL}"
       DB_NAME: "scamshield_production"
 
   frontend:
@@ -204,26 +204,26 @@ databases:
 ```bash
 # Commit your changes
 git add .
-git commit -m "Deploy to Emergent Cloud"
+git commit -m "Deploy to  Cloud"
 git push origin main
 ```
 
 #### Step 2: Monitor Deployment
 ```bash
-# Emergent CLI (optional)
-npm install -g @emergent/cli
-emergent login
-emergent deploy --watch
+#  CLI (optional)
+npm install -g @/cli
+ login
+ deploy --watch
 
 # Or monitor via web dashboard
-# https://dashboard.emergent.sh/projects/scamshield
+# https://dashboard..sh/projects/scamshield
 ```
 
 #### Step 3: Environment Variables
-Configure in Emergent Dashboard:
+Configure in  Dashboard:
 ```bash
 # Backend Environment
-MONGO_URL=<auto-provided-by-emergent>
+MONGO_URL=<auto-provided-by->
 DB_NAME=scamshield_production
 CORS_ORIGINS=<auto-configured>
 
@@ -235,7 +235,7 @@ REACT_APP_BACKEND_URL=<auto-configured-backend-url>
 
 #### Custom Domain Setup
 ```bash
-# In Emergent Dashboard:
+# In  Dashboard:
 # 1. Navigate to "Domains"
 # 2. Add custom domain: scamshield.yourdomain.com
 # 3. Configure DNS records as instructed
@@ -245,8 +245,8 @@ REACT_APP_BACKEND_URL=<auto-configured-backend-url>
 #### Default Deployment URLs
 ```bash
 # Automatically provided:
-Frontend: https://scamshield-<id>.preview.emergentagent.com
-Backend:  https://scamshield-<id>.preview.emergentagent.com/api
+Frontend: https://scamshield-<id>.preview.agent.com
+Backend:  https://scamshield-<id>.preview.agent.com/api
 ```
 
 ## 🔧 Production Configuration
@@ -297,7 +297,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_origins=[
         "https://scamshield.yourdomain.com",
-        "https://scamshield-prod.emergentagent.com"
+        "https://scamshield-prod.agent.com"
     ],
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Authorization"],
@@ -341,9 +341,9 @@ async def health_check():
 # Production logging
 tail -f /var/log/scamshield.log
 
-# Emergent Cloud logs
-emergent logs --service backend --follow
-emergent logs --service frontend --follow
+#  Cloud logs
+ logs --service backend --follow
+ logs --service frontend --follow
 ```
 
 ### Database Maintenance
@@ -449,10 +449,3 @@ const StatsPage = React.lazy(() => import('./pages/Stats'));
 - [ ] Backup procedures implemented
 - [ ] Documentation updated
 - [ ] Team access permissions set
-
----
-
-For additional support, please refer to:
-- **Emergent Documentation**: https://docs.emergent.sh
-- **GitHub Issues**: https://github.com/your-repo/scamshield/issues
-- **Support Email**: support@yourdomain.com
