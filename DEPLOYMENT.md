@@ -1,6 +1,6 @@
 # ScamShield Deployment Guide 🚀
 
-This guide provides comprehensive instructions for deploying ScamShield locally and on  Cloud.
+This guide provides comprehensive instructions for deploying ScamShield locally and on Cloud.
 
 ## 📋 Prerequisites
 
@@ -153,7 +153,7 @@ curl http://localhost:3000
 ### 2. Account Setup
 
 ```bash
-# Create  account at https://.sh
+# Create  account at https://cloud.example.com
 # Navigate to dashboard
 # Click "New Project"
 ```
@@ -245,8 +245,8 @@ REACT_APP_BACKEND_URL=<auto-configured-backend-url>
 #### Default Deployment URLs
 ```bash
 # Automatically provided:
-Frontend: https://scamshield-<id>.preview.agent.com
-Backend:  https://scamshield-<id>.preview.agent.com/api
+Frontend: https://scamshield-<id>.preview.cloud.example.com
+Backend:  https://scamshield-<id>.preview.cloud.example.com/api
 ```
 
 ## 🔧 Production Configuration
@@ -297,7 +297,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_origins=[
         "https://scamshield.yourdomain.com",
-        "https://scamshield-prod.agent.com"
+        "https://scamshield-prod.cloud.example.com"
     ],
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Authorization"],
