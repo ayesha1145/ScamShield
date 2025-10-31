@@ -1,35 +1,29 @@
-// =========================================================
-// ScamShield Frontend — ScannerInput Component
+// ===============================================
+// ScamShield Frontend — Scanner Input
 // Author: Ayesha Habib
 // Description:
-//   Provides a text area for users to paste messages or links,
-//   and triggers a scan request to the backend API.
-// =========================================================
+// Handles user text input and triggers AI-based risk detection.
+// ===============================================
 
 import React, { useState } from "react";
-import CONFIG from "../config";
+import axios from "axios";
 import "./ScannerInput.css";
 
-export default function ScannerInput() {
-  const [input, setInput] = useState("");
-  const [result, setResult] = useState(null);
+export default function ScannerInput({ onScan }) {
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleScan = async () => {
-    if (!input.trim()) return;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setLoading(true);
-    setResult(null);
+
     try {
-      const response = await fetch(`${CONFIG.API_BASE_URL}/scan`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: input }),
-      });
-      const data = await response.json();
-      setResult(data);
+      // Send request to backend
+      const res = await axios.post("http://127.0.0.1:8000/scan", { text: message });
+      onScan(res.data); // Send data up to App.js
     } catch (error) {
-      console.error("Scan failed:", error);
-      setResult({ label: "Error", guidance: "Unable to complete scan." });
+      console.error("Error scanning message:", error);
+      onScan(null);
     } finally {
       setLoading(false);
     }
@@ -37,25 +31,18 @@ export default function ScannerInput() {
 
   return (
     <div className="scanner-container">
-      <h2>🔍 ScamShield Message Scanner</h2>
-      <textarea
-        className="scanner-textarea"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder="Paste suspicious message, link, or phone number..."
-      />
-      <button onClick={handleScan} disabled={loading}>
-        {loading ? "Scanning..." : "Scan Now"}
-      </button>
-
-      {result && (
-        <div className="scan-result card">
-          <h3>Result: {result.label}</h3>
-          <p>{result.guidance}</p>
-        </div>
-      )}
+      <form onSubmit={handleSubmit}>
+        <textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Paste or type message here..."
+          rows="5"
+        />
+        <button type="submit" disabled={loading}>
+          {loading ? "Scanning..." : "Scan Message"}
+        </button>
+      </form>
     </div>
   );
 }
-
 
