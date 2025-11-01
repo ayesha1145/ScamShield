@@ -1,264 +1,178 @@
-# ScamShield 🛡️
+cat > README.md <<'EOF'
+# ScamShield 🛡️  
+A professional-grade hybrid fraud detection system that protects users from scam texts, phone numbers, and links using advanced pattern recognition and machine learning.  
 
-> A real-time AI-powered scam detection platform built with **FastAPI**, **React**, and **Machine Learning** — designed to instantly detect scam texts, links, and phone numbers.
+<p align="center">
+  <img src="ScamShield.png" alt="ScamShield – Intelligent Fraud Detection System" width="800">
+</p>
 
-![ScamShield UI](./ScamShield.png)
-
-A professional-grade hybrid fraud detection system that protects users from scam texts, phone numbers, and links using advanced pattern recognition and machine learning.
-
----
-
-## ⚙️ Tech Stack
-
-**Frontend:** React • TailwindCSS • Shadcn/UI  
-**Backend:** FastAPI • Python • scikit-learn  
-**Database:** MongoDB  
-**Others:** Axios • Yarn • RESTful API • Cloud Deployment
-
----
-
-## 🎯 Problem Statement
-
-With the rise of digital communication, scammers increasingly target users through:
-- **Phishing text messages** claiming urgent account issues  
-- **Lottery/prize scams** promising fake winnings  
+## 🎯 Problem Statement  
+With the rise of digital communication, scammers increasingly target users through:  
+- **Phishing texts** claiming urgent account issues  
+- **Fake prize/lottery notifications**  
 - **Authority impersonation** (IRS, police, banks)  
 - **Malicious links** leading to credential theft  
-- **Phone scams** using spoofed numbers  
+- **Phone number scams** using spoofed IDs  
 
-Users need a reliable way to quickly identify potential scams before falling victim.
+Users need a fast and reliable way to identify potential scams **before** falling victim.  
 
----
+## 💡 Solution  
+ScamShield provides **instant scam detection** through a three-layer hybrid engine:  
+1. **Rule-Based Layer** — Detects common scam phrases and urgency triggers  
+2. **Blacklist Layer** — Checks against known scam domains, numbers, and messages  
+3. **AI Layer** — Uses machine learning to flag suspicious new patterns  
 
-## 💡 Solution
+## ✨ Key Features  
+### 🔍 Universal Scanner  
+- Single input field for text, phone numbers, or URLs  
+- Automatically detects the content type  
+- Returns results in real time  
 
-ScamShield provides **instant scam detection** through a sophisticated 3-layer hybrid detection system:
+### 📊 Smart Risk Assessment  
+- **Risk Score:** 0-100 scale with color-coded safety levels  
+- **Labels:** 🟢 Safe (0–30) | 🟡 Suspicious (31–70) | 🔴 Dangerous (71–100)  
+- **Guidance:** Clear explanations of detected risks  
 
-1. **Rule-Based Layer** – Pattern matching for known scam indicators  
-2. **Blacklist Layer** – Database of confirmed scam domains, numbers, and messages  
-3. **AI Layer** – Machine learning classification for emerging threats  
+### 🧠 Hybrid Detection Engine  
+- Rule engine covering urgency, lottery, and authority patterns  
+- Blacklist database with known scam entities  
+- ML classifier (Logistic Regression + TF-IDF)  
+- Transparent triggers showing why content was flagged  
 
----
+### 📈 Analytics Dashboard  
+- Scan history with timestamped records  
+- Statistics by risk level  
+- Interactive visualization of trends  
 
-## ✨ Key Features
+### 🎨 Professional UI/UX  
+- Built with **React + TailwindCSS** and **Shadcn/UI**  
+- Clean, accessible, mobile-first design  
+- Instant feedback with elegant toasts  
 
-### 🔍 Universal Scanner
-- Single input field for **texts, phone numbers, or URLs**  
-- Automatically detects content type for optimized analysis  
-- Real-time processing with instant results  
+## 🏗️ Technical Architecture  
 
-### 📊 Smart Risk Assessment
-- **Risk Score (0–100)** scale with precise threat evaluation  
-- **Color-coded labels:** 🟢 Safe | 🟡 Suspicious | 🔴 Dangerous  
-- **Clear guidance** for user safety  
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐  
+│   React Frontend │    │  FastAPI Backend │    │  MongoDB Database│  
+│                 │    │                  │    │                 │  
+│ • UI / UX Layer │◄──►│ • Detection API  │◄──►│ • Data Storage  │  
+│ • Real-time UX  │    │ • ML Integration │    │ • Scan History  │  
+└─────────────────┘    └──────────────────┘    └─────────────────┘  
 
-### 🧠 Hybrid Detection Engine
-- 3-layer analysis (Rules + Blacklist + AI)  
-- **Transparent triggers** showing what caused each alert  
-- Scikit-learn model trained on phishing datasets  
+**Frontend:** React 19 + TailwindCSS 3 + Shadcn/UI + Axios  
+**Backend:** FastAPI 0.110 + Uvicorn 0.25 + scikit-learn 1.7 + MongoDB Motor 3.3  
+**Database:** MongoDB 5.0 with async I/O  
 
-### 📈 Analytics Dashboard
-- **Scan History:** last 10 scans with full details  
-- **Statistics:** distribution of Safe/Suspicious/Dangerous scans  
-- **Trend Analysis:** visual overview of scam activity  
+## 🚀 Quick Start  
+### Prerequisites  
+- Node.js 18+ and Yarn  
+- Python 3.11+ with pip  
+- MongoDB 5.0+ running locally or via Docker  
 
-### 🎨 Professional UI/UX
-- Clean, accessible, Microsoft-inspired design  
-- Fully responsive layout for all devices  
-- Fast and smooth transitions built with React + TailwindCSS  
+### Setup Steps  
 
----
+# Clone repository  
+git clone https://github.com/ayesha1145/ScamShield.git  
+cd ScamShield  
 
-## 🏗️ Technical Architecture
+# --- Backend ---  
+cd backend  
+python -m venv venv  
+source venv/bin/activate   # (or venv\Scripts\activate on Windows)  
+pip install -r requirements.txt  
+cp .env.example .env       # then edit MongoDB connection string  
+uvicorn server:app --reload --host 0.0.0.0 --port 8001  
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   React Frontend │◄──►│  FastAPI Backend │◄──►│  MongoDB Database│
-│ • Modern UI      │    │ • Hybrid Scanner │    │ • Scan History  │
-│ • Real-time UX   │    │ • ML Integration │    │ • Blacklists    │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-```
+# --- Frontend ---  
+cd ../frontend  
+yarn install  
+cp .env.example .env       # then set REACT_APP_BACKEND_URL=http://localhost:8001  
+yarn start  
 
-### Backend (FastAPI + Python)
-- Hybrid detection with 3 layers  
-- Scikit-learn ML model (TF-IDF vectorization)  
-- MongoDB for persistence  
-- RESTful API with structured JSON responses  
-- Health and stats endpoints  
+Visit:  
+- **Frontend:** http://localhost:3000  
+- **Backend Docs:** http://localhost:8001/docs  
 
-### Frontend (React + TailwindCSS)
-- Shadcn/UI component library  
-- React Router for page navigation  
-- Axios for API communication  
-- Sonner for notification system  
+## 🧪 Sample Test Cases  
+### ✅ Safe Examples  
+Input: "Hi, this is a reminder for your appointment tomorrow."  
+Result: 15 / 100 – Safe  
 
-### Database (MongoDB)
-```javascript
-Collections:
-├── blocked_domains     // Known scam domains
-├── blocked_numbers     // Suspicious phone numbers
-├── blocked_messages    // Scam message patterns
-└── scan_history        // User scan records
-```
+### ⚠️ Suspicious Examples  
+Input: "Your account expires soon. Verify within 24 hours."  
+Result: 55 / 100 – Suspicious  
 
----
+### 🚨 Dangerous Examples  
+Input: "URGENT: Your account will be suspended in 24 hours! Click here!"  
+Result: 85 / 100 – Dangerous  
+Triggers: Rule (urgency), AI (suspicious language)  
 
-## 🚀 Quick Start
+## 🔧 API Documentation  
+### POST /api/scan  
+Scan any text, URL, or number for scam indicators.  
 
-### Prerequisites
-- **Node.js 18+** and **Yarn**  
-- **Python 3.11+** with **pip**  
-- **MongoDB 5.0+**
+Request:  
+{  
+  "content": "Your account expires soon.",  
+  "scan_type": "text"  
+}  
 
-### Installation
+Response:  
+{  
+  "risk_score": 55,  
+  "label": "🟡 Suspicious",  
+  "guidance": "Appears to contain urgency-based scam language."  
+}  
 
-1️⃣ **Clone and Setup**
-```bash
-git clone <repository-url>
-cd scamshield
-```
+### GET /api/history — Fetch previous scans  
+### GET /api/stats — Retrieve statistics  
+### GET /api/health — Check system status  
 
-2️⃣ **Backend Setup**
-```bash
-cd backend
-pip install -r requirements.txt
-# Configure .env file with MongoDB URL
-uvicorn server:app --reload --host 0.0.0.0 --port 8001
-```
+## 🛣️ Future Roadmap  
+### Phase 2 – Enhanced Detection  
+- Integrate **Google Safe Browsing API**  
+- Add **Twilio Lookup** for phone validation  
+- OCR scanning for images  
 
-3️⃣ **Frontend Setup**
-```bash
-cd frontend
-yarn install
-# Configure .env file with backend URL
-yarn start
-```
+### Phase 3 – Advanced Features  
+- Browser extension for instant protection  
+- User reporting and crowdsourced blacklist updates  
 
-4️⃣ **Access Application**
-- Frontend → `http://localhost:3000`  
-- Backend API → `http://localhost:8001/docs`
+### Phase 4 – Enterprise Edition  
+- Multi-tenant support  
+- Webhooks + Analytics Dashboard  
+- White-label customization  
 
----
+## 📊 Performance Metrics  
+| Metric | Value |  
+|--------|--------|  
+| Detection Accuracy | 95 % + |  
+| Average Response Time | < 200 ms |  
+| False Positives | < 5 % |  
+| Scalability | 1000 + requests / min |  
 
-## 🧪 Sample Test Cases
-
-### ✅ Safe Content
-```
-Input: "Hi, this is a reminder about your appointment tomorrow at 2 PM."
-Result: 15/100 – Safe – Regular appointment reminder
-
-Input: "555-1234"
-Result: 21/100 – Safe – Standard phone number format
-
-Input: "https://google.com"
-Result: 19/100 – Safe – Legitimate domain
-```
-
-### ⚠️ Suspicious Content
-```
-Input: "Your account expires soon. Please verify within 24 hours."
-Result: 55/100 – Suspicious – Urgency pattern detected
-
-Input: "Click here to claim your reward: bit.ly/reward123"
-Result: 45/100 – Suspicious – Shortened URL detected
-```
-
-### 🚨 Dangerous Content
-```
-Input: "URGENT: Your account will be suspended in 24 hours. Click here to verify!"
-Result: 80/100 – Dangerous – Multiple threat indicators
-Triggers: Rule: urgency, Rule: suspicious_links, AI: suspicious_language_patterns
-
-Input: "IRS Notice: You owe back taxes. Pay immediately to avoid arrest."
-Result: 85/100 – Dangerous – Authority + urgency
-Triggers: Rule: authority, Rule: urgency, AI: suspicious_language_patterns
-```
-
----
-
-## 🔧 API Documentation
-
-### `POST /api/scan`
-Scans text, URL, or number for threats.
-
-```json
-{
-  "content": "URGENT: Your account will be suspended...",
-  "scan_type": "text"
-}
-```
-
-### `GET /api/history`
-Returns last 10 scan results.
-
-### `GET /api/stats`
-Returns statistical breakdown of scans.
-
-### `GET /api/health`
-Checks backend, ML model, and DB connectivity.
-
----
-
-## 🛣️ Future Roadmap
-
-### Phase 2 – Enhanced Detection
-- Azure Cognitive Services for text sentiment  
-- Google Safe Browsing API for real-time URL reputation  
-- Twilio Lookup API for phone number validation  
-- OCR scanning for image-based scams  
-
-### Phase 3 – Advanced Features
-- Browser extension for real-time scanning  
-- API authentication and rate limiting  
-- User reporting system for new scams  
-
-### Phase 4 – Enterprise Ready
-- Multi-tenant architecture  
-- Webhooks + integrations  
-- Advanced analytics dashboard  
-
----
-
-## 📊 Performance Metrics
-
-| Metric | Result |
-|--------|---------|
-| Detection Accuracy | 95%+ |
-| Average Response Time | < 200 ms |
-| False Positive Rate | < 5% |
-| Scalability | 1 000+ req/min |
-
----
-
-## 🤝 Contributing
-
-We welcome contributions!  
-See the [CONTRIBUTING.md](CONTRIBUTING.md) guide for details.
-
-**Workflow:**
-1. Fork the repository  
+## 🤝 Contributing  
+Contributions are welcome!  
+1. Fork the repo  
 2. Create a feature branch  
-3. Implement + test  
-4. Open a Pull Request  
+3. Commit and test your changes  
+4. Submit a pull request  
 
----
+## 📄 License  
+Licensed under the MIT License.  
+See [LICENSE](LICENSE) for details.  
 
-## 📄 License
-
-Licensed under the MIT License — see the [LICENSE](LICENSE) file.
-
----
-
-## 🙏 Acknowledgments
-
-- **scikit-learn** – Machine learning  
-- **FastAPI** – Backend framework  
-- **React + TailwindCSS** – Frontend design  
-- **Shadcn/UI** – Components  
-- **MongoDB** – Data persistence  
+## 🙏 Acknowledgments  
+- **FastAPI** — Modern async Python framework  
+- **scikit-learn** — ML and TF-IDF processing  
+- **React + TailwindCSS** — Front-end design  
+- **MongoDB** — Scalable storage  
+- **Shadcn/UI + Sonner** — Clean UI and notifications  
 
 ---
 
 **Built with ❤️ for digital safety and security.**
+EOF
+
+
 
 
