@@ -5,8 +5,9 @@
 # Description:
 #   Main FastAPI application that handles scam detection,
 #   database connections, and API endpoints.
+#   ML model trained on 5,574 real SMS messages from the
+#   UCI SMS Spam Collection dataset.
 # ======================================================
-
 
 from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
@@ -14,17 +15,18 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import pickle
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 import re
-import asyncio
+import urllib.request
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.naive_bayes import MultinomialNB
-import pickle
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 import numpy as np
 
 ROOT_DIR = Path(__file__).parent
@@ -34,6 +36,10 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# Paths for saving the trained model
+MODEL_PATH = ROOT_DIR / "ml_model.pkl"
+VECTORIZER_PATH = ROOT_DIR / "vectorizer.pkl"
 
 # Create the main app without a prefix
 app = FastAPI(title="ScamShield API", description="Hybrid fraud detection system")
@@ -45,7 +51,10 @@ api_router = APIRouter(prefix="/api")
 ml_model = None
 vectorizer = None
 
-# Define Models
+# ======================================================
+# Pydantic Models
+# ======================================================
+
 class ScanRequest(BaseModel):
     content: str
     scan_type: Optional[str] = None  # auto-detected if not provided
@@ -70,7 +79,10 @@ class HistoryItem(BaseModel):
     triggers: List[str]
     timestamp: datetime
 
-# Rule-based detection patterns
+# ======================================================
+# Rule-based Detection Patterns
+# ======================================================
+
 SCAM_PATTERNS = {
     'urgency': [
         r'urgent|immediate|expire|expires|within \d+ hours?',
@@ -105,29 +117,25 @@ SCAM_PATTERNS = {
     ]
 }
 
+# ======================================================
+# Detection Helpers
+# ======================================================
+
 def detect_input_type(content: str) -> str:
-    """Auto-detect the type of input content"""
     content = content.strip()
-    
-    # Phone number pattern
     phone_pattern = r'^[\+]?[1-9]?[\-\.\s]?\(?[0-9]{3}\)?[\-\.\s]?[0-9]{3}[\-\.\s]?[0-9]{4,6}$'
     if re.match(phone_pattern, content) or content.replace('-', '').replace(' ', '').replace('(', '').replace(')', '').isdigit():
         return 'phone'
-    
-    # URL pattern
     url_pattern = r'^https?://|^www\.|\.com$|\.org$|\.net$'
     if re.search(url_pattern, content, re.IGNORECASE):
         return 'url'
-    
-    # Default to text message
     return 'text'
 
-def apply_rule_layer(content: str, scan_type: str) -> tuple[int, List[str]]:
-    """Apply rule-based detection and return score + triggers"""
+def apply_rule_layer(content: str, scan_type: str) -> tuple:
     score = 0
     triggers = []
     content_lower = content.lower()
-    
+
     for category, patterns in SCAM_PATTERNS.items():
         for pattern in patterns:
             if re.search(pattern, content_lower):
@@ -139,132 +147,92 @@ def apply_rule_layer(content: str, scan_type: str) -> tuple[int, List[str]]:
                     score += 25
                 triggers.append(f"Rule: {category}")
                 break
-    
-    # Additional rules based on type
+
     if scan_type == 'phone':
-        # Check for more specific scam number patterns (avoid false positives)
         scam_number_patterns = [
-            r'^(000|111|222|333|444|666|777|888|999)[-\s]?\d{3}[-\s]?\d{4}$',  # Full repeated digits
-            r'^\+1[-\s]?900[-\s]?\d{3}[-\s]?\d{4}$',  # Premium rate numbers
-            r'^\d{4,6}$',  # Too short (likely fake)
-            r'^\d{11,}$',  # Too long (likely fake)
+            r'^(000|111|222|333|444|666|777|888|999)[-\s]?\d{3}[-\s]?\d{4}$',
+            r'^\+1[-\s]?900[-\s]?\d{3}[-\s]?\d{4}$',
+            r'^\d{4,6}$',
+            r'^\d{11,}$',
         ]
         for pattern in scam_number_patterns:
             if re.search(pattern, content.replace('-', '').replace(' ', '').replace('(', '').replace(')', '')):
                 score += 20
                 triggers.append("Rule: suspicious_number_pattern")
                 break
-    
+
     elif scan_type == 'url':
-        # Check for suspicious URL characteristics (more specific)
         content_clean = content.lower().strip()
         suspicious_url_patterns = [
-            r'^https?://[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}',  # Direct IP address
-            r'[a-z0-9]{20,}\.',  # Very long random subdomain (20+ chars)
-            r'[0-9]{10,}\.',  # Long numeric subdomain
+            r'^https?://[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}',
+            r'[a-z0-9]{20,}\.',
+            r'[0-9]{10,}\.',
         ]
-        
-        # Check for known legitimate domains to avoid false positives
         legitimate_domains = ['google.com', 'microsoft.com', 'apple.com', 'amazon.com', 'facebook.com', 'youtube.com', 'wikipedia.org']
         is_legitimate = any(domain in content_clean for domain in legitimate_domains)
-        
         if not is_legitimate:
             for pattern in suspicious_url_patterns:
                 if re.search(pattern, content_clean):
                     score += 25
                     triggers.append("Rule: suspicious_url_pattern")
                     break
-    
-    return min(score, 70), triggers  # Cap rule score at 70
 
-async def apply_blacklist_layer(content: str, scan_type: str) -> tuple[int, List[str]]:
-    # ======================================================
-# ScamShield Backend – Server
-# ------------------------------------------------------
-# Author: Ayesha Habib
-# Description:
-#   Main FastAPI application that handles scam detection,
-#   database connections, and API endpoints.
-# ======================================================
+    return min(score, 70), triggers
 
+async def apply_blacklist_layer(content: str, scan_type: str) -> tuple:
     score = 0
     triggers = []
-    
     try:
         if scan_type == 'phone':
-            # Check blocked numbers
             blocked = await db.blocked_numbers.find_one({"number": content})
             if blocked:
                 score += 50
                 triggers.append("Blacklist: known_scam_number")
-        
         elif scan_type == 'url':
-            # Extract domain from URL
             domain_match = re.search(r'://([^/]+)', content)
             if domain_match:
                 domain = domain_match.group(1).lower()
-                
-                # Skip legitimate domains
                 legitimate_domains = [
-                    'google.com', 'microsoft.com', 'apple.com', 'amazon.com', 
+                    'google.com', 'microsoft.com', 'apple.com', 'amazon.com',
                     'facebook.com', 'youtube.com', 'wikipedia.org', 'github.com',
                     'linkedin.com', 'twitter.com', 'instagram.com', 'reddit.com'
                 ]
-                
                 is_legitimate = any(legit_domain in domain for legit_domain in legitimate_domains)
-                
                 if not is_legitimate:
                     blocked = await db.blocked_domains.find_one({"domain": domain})
                     if blocked:
                         score += 50
                         triggers.append("Blacklist: known_scam_domain")
-        
         elif scan_type == 'text':
-            # Check against blocked message patterns
             blocked_messages = await db.blocked_messages.find().to_list(100)
             for blocked_msg in blocked_messages:
                 if blocked_msg['pattern'].lower() in content.lower():
                     score += 50
                     triggers.append("Blacklist: known_scam_message")
                     break
-    
     except Exception as e:
         logging.error(f"Blacklist check error: {e}")
-    
     return score, triggers
 
-def apply_ai_layer(content: str) -> tuple[int, List[str]]:
-    """Apply ML-based detection"""
+def apply_ai_layer(content: str) -> tuple:
     global ml_model, vectorizer
-    
     if ml_model is None or vectorizer is None:
         return 0, []
-    
     try:
-        # Vectorize the content
         content_vector = vectorizer.transform([content])
-        
-        # Get prediction probability
         proba = ml_model.predict_proba(content_vector)[0]
         scam_probability = proba[1] if len(proba) > 1 else 0
-        
-        # Convert probability to score (0-40 points)
         ai_score = int(scam_probability * 40)
-        
         triggers = []
         if ai_score > 20:
             triggers.append("AI: suspicious_language_patterns")
-        
         return ai_score, triggers
-    
     except Exception as e:
         logging.error(f"AI layer error: {e}")
         return 0, []
 
-def calculate_final_score_and_label(rule_score: int, blacklist_score: int, ai_score: int) -> tuple[int, str, str]:
-    """Calculate final risk score and determine label and guidance"""
+def calculate_final_score_and_label(rule_score: int, blacklist_score: int, ai_score: int) -> tuple:
     total_score = min(rule_score + blacklist_score + ai_score, 100)
-    
     if total_score <= 30:
         label = "🟢 Safe"
         guidance = "This content appears safe. No significant risk indicators detected."
@@ -274,63 +242,88 @@ def calculate_final_score_and_label(rule_score: int, blacklist_score: int, ai_sc
     else:
         label = "🔴 Dangerous"
         guidance = "This content is highly likely to be a scam. Do not share personal information, click links, or send money."
-    
     return total_score, label, guidance
 
+# ======================================================
+# ML Model — trained on 5,574 real SMS messages
+# (UCI SMS Spam Collection Dataset)
+# ======================================================
+
 async def initialize_ml_model():
-    """Initialize the ML model with training data"""
     global ml_model, vectorizer
-    
+
+    # Load from disk if already trained
+    if MODEL_PATH.exists() and VECTORIZER_PATH.exists():
+        try:
+            with open(MODEL_PATH, 'rb') as f:
+                ml_model = pickle.load(f)
+            with open(VECTORIZER_PATH, 'rb') as f:
+                vectorizer = pickle.load(f)
+            logging.info("ML model loaded from disk.")
+            return
+        except Exception as e:
+            logging.warning(f"Could not load saved model, retraining: {e}")
+
     try:
-        # Training data - mix of scam and legitimate messages
-        training_texts = [
-            # Scam examples
-            "URGENT: Your account will be suspended in 24 hours. Click here to verify immediately!",
-            "Congratulations! You've won $1,000,000 in our lottery. Claim your prize now!",
-            "IRS Notice: You owe back taxes. Pay immediately to avoid arrest.",
-            "Your bank account has been compromised. Verify your details: bit.ly/secure123",
-            "Final notice: Your subscription expires today. Renew now or lose access forever!",
-            "You've inherited $2.5 million from a distant relative. Contact us to claim.",
-            "ALERT: Suspicious activity detected. Enter your PIN to secure your account.",
-            "Limited time offer: Bitcoin investment returns 500% guaranteed!",
-            "Police warrant issued. Call this number immediately to resolve: 555-SCAM",
-            "Your computer is infected! Download our antivirus software now!",
-            
-            # Legitimate examples
-            "Hi, this is a reminder about your appointment tomorrow at 2 PM.",
-            "Your order has been shipped and will arrive in 2-3 business days.",
-            "Thank you for your purchase. Your receipt is attached.",
-            "Meeting rescheduled to Friday 10 AM. Please confirm attendance.",
-            "Your subscription renews next month. No action needed.",
-            "Weather alert: Rain expected this afternoon. Drive safely!",
-            "Happy birthday! Hope you have a wonderful day.",
-            "Your package was delivered to your front door.",
-            "Reminder: Library books are due next week.",
-            "New menu items available at your favorite restaurant!",
-        ]
-        
-        # Labels (0 = legitimate, 1 = scam)
-        training_labels = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  # First 10 are scams
-                          0, 0, 0, 0, 0, 0, 0, 0, 0, 0]   # Last 10 are legitimate
-        
-        # Create and train the model
-        vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
-        X = vectorizer.fit_transform(training_texts)
-        
-        ml_model = LogisticRegression(random_state=42)
-        ml_model.fit(X, training_labels)
-        
-        logging.info("ML model initialized successfully")
-    
+        # Download the UCI SMS Spam Collection dataset (5,574 messages)
+        dataset_url = "https://raw.githubusercontent.com/justmarkham/pycon-2016-tutorial/master/data/sms.tsv"
+        dataset_path = ROOT_DIR / "sms_spam.tsv"
+
+        if not dataset_path.exists():
+            logging.info("Downloading SMS Spam dataset...")
+            urllib.request.urlretrieve(dataset_url, dataset_path)
+            logging.info("Dataset downloaded.")
+
+        # Parse the dataset
+        texts = []
+        labels = []
+        with open(dataset_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                parts = line.strip().split('\t')
+                if len(parts) == 2:
+                    label, text = parts
+                    labels.append(1 if label == 'spam' else 0)
+                    texts.append(text)
+
+        logging.info(f"Loaded {len(texts)} messages ({sum(labels)} spam, {len(labels)-sum(labels)} ham)")
+
+        # Train/test split to evaluate accuracy
+        X_train, X_test, y_train, y_test = train_test_split(
+            texts, labels, test_size=0.2, random_state=42
+        )
+
+        # Vectorize
+        vectorizer = TfidfVectorizer(max_features=3000, stop_words='english')
+        X_train_vec = vectorizer.fit_transform(X_train)
+        X_test_vec = vectorizer.transform(X_test)
+
+        # Train
+        ml_model = LogisticRegression(random_state=42, max_iter=1000)
+        ml_model.fit(X_train_vec, y_train)
+
+        # Evaluate
+        y_pred = ml_model.predict(X_test_vec)
+        accuracy = accuracy_score(y_test, y_pred)
+        logging.info(f"ML model trained. Test accuracy: {accuracy:.2%}")
+
+        # Save to disk so we don't retrain on every restart
+        with open(MODEL_PATH, 'wb') as f:
+            pickle.dump(ml_model, f)
+        with open(VECTORIZER_PATH, 'wb') as f:
+            pickle.dump(vectorizer, f)
+        logging.info("ML model saved to disk.")
+
     except Exception as e:
         logging.error(f"Failed to initialize ML model: {e}")
         ml_model = None
         vectorizer = None
 
+# ======================================================
+# Database Seeding
+# ======================================================
+
 async def seed_database():
-    """Seed the database with initial blacklist data"""
     try:
-        # Seed blocked domains
         domains_to_seed = [
             {"domain": "bit.ly", "reason": "URL shortener often used in scams"},
             {"domain": "scam-bank-verify.com", "reason": "Phishing domain"},
@@ -339,26 +332,22 @@ async def seed_database():
             {"domain": "claim-inheritance.biz", "reason": "Inheritance scam domain"},
             {"domain": "irs-tax-urgent.com", "reason": "Fake IRS domain"},
         ]
-        
         for domain_data in domains_to_seed:
             existing = await db.blocked_domains.find_one({"domain": domain_data["domain"]})
             if not existing:
                 await db.blocked_domains.insert_one(domain_data)
-        
-        # Seed blocked numbers
+
         numbers_to_seed = [
             {"number": "555-0123", "reason": "Known scam number"},
             {"number": "1-800-SCAM-1", "reason": "Fake support number"},
             {"number": "+1-555-000-0000", "reason": "Common scam pattern"},
             {"number": "123-456-7890", "reason": "Test scam number"},
         ]
-        
         for number_data in numbers_to_seed:
             existing = await db.blocked_numbers.find_one({"number": number_data["number"]})
             if not existing:
                 await db.blocked_numbers.insert_one(number_data)
-        
-        # Seed blocked message patterns
+
         messages_to_seed = [
             {"pattern": "congratulations you have won", "reason": "Lottery scam pattern"},
             {"pattern": "urgent account verification", "reason": "Phishing pattern"},
@@ -366,43 +355,38 @@ async def seed_database():
             {"pattern": "suspended within 24 hours", "reason": "Urgency scam pattern"},
             {"pattern": "final notice", "reason": "Fake authority pattern"},
         ]
-        
         for message_data in messages_to_seed:
             existing = await db.blocked_messages.find_one({"pattern": message_data["pattern"]})
             if not existing:
                 await db.blocked_messages.insert_one(message_data)
-        
+
         logging.info("Database seeded successfully")
-    
     except Exception as e:
         logging.error(f"Database seeding error: {e}")
 
+# ======================================================
 # API Endpoints
+# ======================================================
+
 @api_router.post("/scan", response_model=ScanResult)
 async def scan_content(request: ScanRequest):
-    """Main scanning endpoint that applies all detection layers"""
     try:
         content = request.content.strip()
         if not content:
             raise HTTPException(status_code=400, detail="Content cannot be empty")
-        
-        # Auto-detect input type if not provided
+
         scan_type = request.scan_type or detect_input_type(content)
-        
-        # Apply detection layers
+
         rule_score, rule_triggers = apply_rule_layer(content, scan_type)
         blacklist_score, blacklist_triggers = await apply_blacklist_layer(content, scan_type)
         ai_score, ai_triggers = apply_ai_layer(content)
-        
-        # Calculate final results
+
         total_score, label, guidance = calculate_final_score_and_label(
             rule_score, blacklist_score, ai_score
         )
-        
-        # Combine all triggers
+
         all_triggers = rule_triggers + blacklist_triggers + ai_triggers
-        
-        # Create result
+
         result = ScanResult(
             content=content,
             scan_type=scan_type,
@@ -411,15 +395,14 @@ async def scan_content(request: ScanRequest):
             guidance=guidance,
             triggers=all_triggers
         )
-        
-        # Store in history
+
         try:
             await db.scan_history.insert_one(result.dict())
         except Exception as e:
             logging.error(f"Failed to store scan history: {e}")
-        
+
         return result
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -428,7 +411,6 @@ async def scan_content(request: ScanRequest):
 
 @api_router.get("/history", response_model=List[HistoryItem])
 async def get_scan_history():
-    """Get the last 10 scan results"""
     try:
         history = await db.scan_history.find().sort("timestamp", -1).limit(10).to_list(10)
         return [HistoryItem(**item) for item in history]
@@ -438,13 +420,11 @@ async def get_scan_history():
 
 @api_router.get("/stats")
 async def get_stats():
-    """Get scanning statistics"""
     try:
         total_scans = await db.scan_history.count_documents({})
         safe_scans = await db.scan_history.count_documents({"label": "🟢 Safe"})
         suspicious_scans = await db.scan_history.count_documents({"label": "🟡 Suspicious"})
         dangerous_scans = await db.scan_history.count_documents({"label": "🔴 Dangerous"})
-        
         return {
             "total_scans": total_scans,
             "safe_scans": safe_scans,
@@ -455,12 +435,18 @@ async def get_stats():
         logging.error(f"Stats retrieval error: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve statistics")
 
-# Health check endpoint
 @api_router.get("/health")
 async def health_check():
-    return {"status": "healthy", "ml_model_loaded": ml_model is not None}
+    return {
+        "status": "healthy",
+        "ml_model_loaded": ml_model is not None,
+        "training_data": "UCI SMS Spam Collection (5,574 messages)"
+    }
 
-# Include the router in the main app
+# ======================================================
+# App Setup
+# ======================================================
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -471,7 +457,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -480,16 +465,9 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize ML model and seed database on startup"""
     await initialize_ml_model()
     await seed_database()
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    """Close database connection on shutdown"""
-    client.close()  
-
-    # End of server.py
-# Notes:
-#   Future plans include adding user authentication,
-#   rate-limiting, and improved AI-based detection.
+    client.close()
