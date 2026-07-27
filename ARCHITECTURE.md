@@ -1,3 +1,11 @@
+# ScamShield Architecture Overview 🏗️
+
+> This document provides a detailed, end-to-end explanation of ScamShield’s system architecture,
+> including frontend, backend, ML detection engine, database schema, and deployment patterns.
+
+_Last updated: October 2025 by Ayesha Habib_
+
+
 # ScamShield Architecture Guide 🏗️
 
 A comprehensive overview of ScamShield's system architecture, design patterns, and technical implementation details.

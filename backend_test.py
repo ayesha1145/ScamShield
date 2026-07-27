@@ -5,7 +5,7 @@ from datetime import datetime
 import time
 
 class ScamShieldAPITester:
-    def __init__(self, base_url="https://scamshield-27.preview.emergentagent.com"):
+    def __init__(self, base_url="https://scamshield-27.preview.cloud.example.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.tests_run = 0
@@ -34,7 +34,6 @@ class ScamShieldAPITester:
                 self.tests_passed += 1
                 print(f"✅ Passed - Status: {response.status_code}")
                 
-                # Parse and return response data
                 try:
                     response_data = response.json()
                     if expected_content:
@@ -254,7 +253,6 @@ class ScamShieldAPITester:
             print(f"   History items returned: {len(response)}")
             if len(response) > 0:
                 print(f"   Sample item keys: {list(response[0].keys())}")
-                # Verify required fields
                 required_fields = ['id', 'content', 'scan_type', 'risk_score', 'label', 'guidance', 'triggers', 'timestamp']
                 for field in required_fields:
                     if field not in response[0]:
@@ -278,7 +276,6 @@ class ScamShieldAPITester:
             print(f"   Suspicious scans: {response.get('suspicious_scans', 0)}")
             print(f"   Dangerous scans: {response.get('dangerous_scans', 0)}")
             
-            # Verify required fields
             required_fields = ['total_scans', 'safe_scans', 'suspicious_scans', 'dangerous_scans']
             for field in required_fields:
                 if field not in response:
@@ -318,7 +315,6 @@ class ScamShieldAPITester:
         else:
             print("⚠️  AI layer may not be working properly")
             
-        # Blacklist layer might not trigger with our test data
         print("ℹ️  Blacklist layer requires specific blacklisted content to trigger")
         
         return True
@@ -329,7 +325,6 @@ def main():
     
     tester = ScamShieldAPITester()
     
-    # Run all tests
     tests = [
         ("Health Check", tester.test_health_check),
         ("Safe Content Scanning", tester.test_scan_safe_content),
@@ -349,7 +344,6 @@ def main():
             print(f"❌ Test failed with exception: {str(e)}")
             tester.tests_run += 1
     
-    # Print final results
     print(f"\n{'='*50}")
     print(f"📊 Final Results:")
     print(f"   Tests Run: {tester.tests_run}")
@@ -365,3 +359,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
