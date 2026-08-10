@@ -1,0 +1,124 @@
+.history-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+
+.spinner-lg {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-banner {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--dangerous);
+  border-radius: var(--radius);
+  color: var(--dangerous);
+  padding: 14px 18px;
+  font-size: 14px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-item {
+  transition: border-color 0.15s;
+}
+
+.history-item.safe { border-left: 3px solid var(--safe); }
+.history-item.suspicious { border-left: 3px solid var(--suspicious); }
+.history-item.dangerous { border-left: 3px solid var(--dangerous); }
+
+.history-item-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.history-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.history-badge.safe {
+  background: var(--safe-bg);
+  color: var(--safe);
+}
+
+.history-badge.suspicious {
+  background: var(--suspicious-bg);
+  color: var(--suspicious);
+}
+
+.history-badge.dangerous {
+  background: var(--dangerous-bg);
+  color: var(--dangerous);
+}
+
+.history-score {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.history-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.history-content {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 10px;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.history-meta {
+  display: flex;
+  gap: 12px;
+}
+
+.history-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-glow);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+}
+
+.history-triggers {
+  font-size: 11px;
+  color: var(--text-muted);
+}

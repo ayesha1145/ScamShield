@@ -1,140 +1,166 @@
-# ScamShield 🛡️  
-**AI-powered hybrid fraud detection system that identifies and explains scams in real time.  
-Built with FastAPI, React, and MongoDB — combining rule-based logic with machine learning.  
-Designed for transparency, accuracy, and real-world digital safety at scale.**  
+# 🛡️ ScamShield
 
-ScamShield is designed to detect, explain, and prevent digital scams — combining human logic and machine learning to make online communication safer for everyone.
+**AI-powered scam detection for SMS messages, URLs, and phone numbers.**
 
----
+ScamShield uses a three-layer hybrid detection engine to identify scams in real time — combining rule-based pattern matching, a blacklist database, and a machine learning model trained on 5,574 real SMS messages with 97.2% accuracy.
 
-## 🎯 Problem Statement  
-Scam and phishing messages are increasingly common across SMS, email, and online chat platforms.  
-Traditional spam filters fail to **explain why** something is dangerous, leaving users confused and vulnerable.  
+**[Live Demo →](https://scam-shield-beta.vercel.app)**
 
 ---
 
-## 💡 Solution  
-ScamShield uses a **three-layer hybrid detection system**:  
-1. **Rule-Based Detection** — Recognizes scam-related keywords (urgency, impersonation, fake rewards).  
-2. **Blacklist Matching** — Checks against known scam domains, numbers, and phrases stored in MongoDB.  
-3. **AI Classification** — Uses a trained Logistic Regression model with TF-IDF to catch new scam patterns.
+## Why ScamShield
 
-Each message receives a **risk score (0–100)** with a clear label:  
-🟢 Safe | 🟡 Suspicious | 🔴 Dangerous  
+Scam messages targeting students and newcomers are increasingly sophisticated. Existing tools require apps or subscriptions. ScamShield is free, instant, and works on any device — paste a message and get a risk score in under 200ms.
 
 ---
 
-## ✨ Key Features  
-- 🔍 **Universal Scanner:** Works for text, phone numbers, and URLs.  
-- ⚡ **Instant Analysis:** Real-time response with AI scoring.  
-- 🧠 **Hybrid Detection Engine:** Combines pattern matching, blacklists, and ML.  
-- 📊 **Analytics Dashboard:** Visual breakdown of scan results.  
-- 📜 **Transparency:** Shows triggers behind every detection.  
-- 🎨 **Modern UI/UX:** Built with React, TailwindCSS, and Shadcn/UI.  
+## Features
+
+- **Three-layer detection** — rules + blacklist + ML, combined into a single risk score (0–100)
+- **Auto-detection** — automatically identifies whether input is a text message, URL, or phone number
+- **Scan history** — stores and retrieves the last 10 scans per session
+- **Live statistics** — tracks total scans, safe/suspicious/dangerous breakdown
+- **97.2% accuracy** — ML model trained on the UCI SMS Spam Collection dataset (5,574 messages)
 
 ---
 
-## 🏗️ Technical Architecture  
-**Frontend:** React + TailwindCSS + Shadcn/UI  
-**Backend:** FastAPI + scikit-learn + Uvicorn  
-**Database:** MongoDB (asynchronous Motor driver)  
+## Architecture
 
-**Flow:**  
-User Input → FastAPI Detection Engine → AI + Rules + DB → Response → React UI  
-
----
-
-## ⚙️ Installation & Setup  
-**Prerequisites:** Node.js 18+, Yarn, Python 3.11+, MongoDB 5.0+
-
-### 1️⃣ Clone the Project
-```bash
-git clone https://github.com/ayesha1145/ScamShield.git
-cd ScamShield
+```
+User Input
+    │
+    ▼
+┌─────────────────────────────────────┐
+│           FastAPI Backend           │
+│                                     │
+│  ┌──────────┐  ┌────────────────┐  │
+│  │  Rule    │  │   Blacklist    │  │
+│  │ Engine   │  │   Database     │  │
+│  │ (regex)  │  │  (MongoDB)     │  │
+│  └────┬─────┘  └───────┬────────┘  │
+│       │                │            │
+│       ▼                ▼            │
+│  ┌─────────────────────────────┐   │
+│  │     ML Model (sklearn)      │   │
+│  │  TF-IDF + Logistic Regression│  │
+│  │  Trained: 5,574 SMS messages│   │
+│  └─────────────┬───────────────┘   │
+│                │                    │
+│         Risk Score (0–100)          │
+└─────────────────────────────────────┘
+    │
+    ▼
+React Frontend (Vercel)
 ```
 
-### 2️⃣ Backend Setup
+**Detection layers:**
+| Layer | Method | Max Score |
+|---|---|---|
+| Rule Engine | Regex patterns (urgency, lottery, authority, etc.) | 70 |
+| Blacklist | MongoDB lookup of known scam domains/numbers/phrases | 50 |
+| AI Layer | TF-IDF vectorizer + Logistic Regression | 40 |
+
+Final score = sum of all layers, capped at 100.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | FastAPI, Python 3.11 |
+| Database | MongoDB Atlas (Motor async driver) |
+| ML | scikit-learn (TF-IDF + Logistic Regression) |
+| Frontend | React, React Router |
+| Backend Deploy | Render |
+| Frontend Deploy | Vercel |
+
+---
+
+## Local Setup
+
+### Backend
+
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # (on Windows use venv\Scripts\activate)
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env  # edit MongoDB connection URL
+```
+
+Create `backend/.env`:
+```
+MONGO_URL=your_mongodb_connection_string
+DB_NAME=scamshield
+```
+
+```bash
 uvicorn server:app --reload
 ```
 
-### 3️⃣ Frontend Setup
+### Frontend
+
 ```bash
-cd ../frontend
-yarn install
-cp .env.example .env  # set REACT_APP_BACKEND_URL appropriately
-yarn start
+cd frontend
+npm install
+```
+
+Create `frontend/.env`:
+```
+REACT_APP_API_BASE_URL=http://localhost:8000/api
+```
+
+```bash
+npm start
 ```
 
 ---
 
-## 🧪 Example Detection Results
-✅ **Safe Example:**  
-“Hi, your order has been shipped.” → 🟢 Safe (Score: 20/100)  
+## API Endpoints
 
-⚠️ **Suspicious Example:**  
-“Your account expires soon. Verify now.” → 🟡 Suspicious (Score: 55/100)  
-
-🚨 **Dangerous Example:**  
-“URGENT: Bank account suspended! Click here immediately.” → 🔴 Dangerous (Score: 87/100)  
-
----
-
-## 🔧 API Endpoints
 | Method | Endpoint | Description |
-|--------|-----------|-------------|
-| POST | `/api/scan` | Scan any message or link |
-| GET | `/api/history` | Retrieve previous scans |
-| GET | `/api/stats` | Get analytics summary |
-| GET | `/api/health` | Check backend health & model status |
+|---|---|---|
+| POST | `/api/scan` | Scan a message, URL, or phone number |
+| GET | `/api/history` | Retrieve last 10 scan results |
+| GET | `/api/stats` | Get aggregate scan statistics |
+| GET | `/api/health` | Health check + model status |
+
+### Example request
+
+```bash
+curl -X POST https://scamshield-fi4v.onrender.com/api/scan \
+  -H "Content-Type: application/json" \
+  -d '{"content": "URGENT: Your account will be suspended in 24 hours!"}'
+```
+
+### Example response
+
+```json
+{
+  "id": "abc123",
+  "content": "URGENT: Your account will be suspended in 24 hours!",
+  "scan_type": "text",
+  "risk_score": 85,
+  "label": "🔴 Dangerous",
+  "guidance": "This content is highly likely to be a scam.",
+  "triggers": ["Rule: urgency", "AI: suspicious_language_patterns"],
+  "timestamp": "2026-01-01T00:00:00Z"
+}
+```
 
 ---
 
-## 📊 Performance
-| Metric | Value |
-|--------|--------|
-| Detection Accuracy | 95%+ |
-| Avg Response Time | <200ms |
-| False Positive Rate | <5% |
-| Scalability | 1000+ requests/min |
+## ML Model Details
+
+- **Dataset:** UCI SMS Spam Collection (5,574 messages — 747 spam, 4,827 ham)
+- **Vectorizer:** TF-IDF (3,000 features, English stopwords removed)
+- **Classifier:** Logistic Regression
+- **Train/test split:** 80/20
+- **Test accuracy:** 97.22%
+- **Model persistence:** Saved to disk on first run, loaded on subsequent restarts
 
 ---
 
-## 🛣️ Roadmap
-**Phase 2:** Integrate Google Safe Browsing & Twilio Lookup APIs  
-**Phase 3:** Add browser extension and crowdsourced blacklist updates  
-**Phase 4:** Enterprise version with analytics and webhook integration  
+## Author
 
----
-
-## 🤝 Contributing
-We welcome contributions!  
-1. Fork the repo  
-2. Create a feature branch (`git checkout -b feature-xyz`)  
-3. Commit your changes  
-4. Push & submit a PR  
-
----
-
-## 📜 License  
-Licensed under the **MIT License**.  
-See [LICENSE](LICENSE) for full terms.
-
----
-
-## 🙏 Acknowledgments  
-- FastAPI – high-performance Python backend  
-- scikit-learn – ML model for scam prediction  
-- React + TailwindCSS – modern frontend stack  
-- MongoDB – flexible data persistence  
-- Shadcn/UI – elegant component styling  
-
----
-
-**Built with ❤️ to protect users from digital scams and make the web safer.**
-
+**Ayesha Habib** — University of Manitoba

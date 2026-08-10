@@ -1,10 +1,3 @@
-// ==========================================
-// ScamShield Frontend — Navigation Bar
-// Author: Ayesha Habib
-// Description: Provides a consistent navigation bar with links
-//              to main ScamShield pages (Scanner, History, Stats).
-// ==========================================
-
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import "./Navigation.css";
@@ -12,30 +5,32 @@ import "./Navigation.css";
 export default function Navigation() {
   const location = useLocation();
 
+  const links = [
+    { to: "/", label: "Scanner" },
+    { to: "/history", label: "History" },
+    { to: "/stats", label: "Stats" },
+  ];
+
   return (
     <nav className="navbar">
-      <h1 className="navbar-title">🛡️ ScamShield</h1>
-      <div className="navbar-links">
-        <Link
-          to="/"
-          className={location.pathname === "/" ? "active" : ""}
-        >
-          Scanner
-        </Link>
-        <Link
-          to="/history"
-          className={location.pathname === "/history" ? "active" : ""}
-        >
-          History
-        </Link>
-        <Link
-          to="/stats"
-          className={location.pathname === "/stats" ? "active" : ""}
-        >
-          Stats
-        </Link>
+      <div className="navbar-inner">
+        <div className="navbar-brand">
+          <span className="navbar-shield">🛡️</span>
+          <span className="navbar-title">ScamShield</span>
+          <span className="navbar-tag">AI-Powered</span>
+        </div>
+        <div className="navbar-links">
+          {links.map(({ to, label }) => (
+            <Link
+              key={to}
+              to={to}
+              className={`nav-link ${location.pathname === to ? "active" : ""}`}
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
       </div>
     </nav>
   );
 }
-
