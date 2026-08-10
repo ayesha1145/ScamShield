@@ -1,65 +1,90 @@
-/* ================================================
-   ScamShield Frontend — Global Styles
-   Author: Ayesha Habib
-   Description:
-   Final layout polish and responsive design for ScamShield frontend.
-   ================================================ */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
 :root {
-  --color-accent: #2563eb;
-  --color-bg: #f8fafc;
-  --color-card: #ffffff;
-  --color-border: #e2e8f0;
-  --color-text: #1e293b;
+  --bg: #0a0f1e;
+  --bg-card: #111827;
+  --bg-card-hover: #1a2235;
+  --border: #1e293b;
+  --border-light: #2d3748;
+  --accent: #3b82f6;
+  --accent-glow: rgba(59, 130, 246, 0.15);
+  --safe: #10b981;
+  --safe-bg: rgba(16, 185, 129, 0.1);
+  --suspicious: #f59e0b;
+  --suspicious-bg: rgba(245, 158, 11, 0.1);
+  --dangerous: #ef4444;
+  --dangerous-bg: rgba(239, 68, 68, 0.1);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #475569;
+  --font-sans: "Inter", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 }
 
 body {
-  font-family: "Inter", sans-serif;
-  margin: 0;
-  padding: 0;
-  background-color: var(--color-bg);
-  color: var(--color-text);
+  font-family: var(--font-sans);
+  background-color: var(--bg);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.6;
 }
 
-.App {
+.app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-main {
+.main-content {
   flex: 1;
-  padding: 32px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 32px;
-}
-
-/* Card container for result display */
-.result-card {
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  padding: 24px;
-  max-width: 700px;
+  max-width: 860px;
+  margin: 0 auto;
   width: 100%;
+  padding: 40px 24px;
 }
 
-/* Responsive tweaks */
-@media (max-width: 768px) {
-  main {
-    padding: 16px;
-  }
-
-  .result-card {
-    padding: 16px;
-  }
-
-  textarea {
-    width: 100%;
-  }
+/* Shared card style */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  box-shadow: var(--shadow);
 }
 
+/* Page title */
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
 
+.page-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 28px;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+
+.empty-state .icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-state p {
+  font-size: 15px;
+}
