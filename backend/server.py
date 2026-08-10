@@ -7,27 +7,28 @@
 #   database connections, and API endpoints.
 #   ML model trained on 5,574 real SMS messages from the
 #   UCI SMS Spam Collection dataset.
+#   Supports: text, URL, phone, email, and file uploads.
 # ======================================================
 
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import pickle
+import re
+import uuid
+import urllib.request
+import numpy as np
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional
-import uuid
 from datetime import datetime, timezone
-import re
-import urllib.request
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-import numpy as np
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -41,10 +42,8 @@ db = client[os.environ['DB_NAME']]
 MODEL_PATH = ROOT_DIR / "ml_model.pkl"
 VECTORIZER_PATH = ROOT_DIR / "vectorizer.pkl"
 
-# Create the main app without a prefix
+# Create the main app
 app = FastAPI(title="ScamShield API", description="Hybrid fraud detection system")
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
 # Global ML model variables
@@ -57,7 +56,7 @@ vectorizer = None
 
 class ScanRequest(BaseModel):
     content: str
-    scan_type: Optional[str] = None  # auto-detected if not provided
+    scan_type: Optional[str] = None
 
 class ScanResult(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -67,6 +66,7 @@ class ScanResult(BaseModel):
     label: str
     guidance: str
     triggers: List[str]
+    explanation: str = ""
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class HistoryItem(BaseModel):
@@ -77,6 +77,7 @@ class HistoryItem(BaseModel):
     label: str
     guidance: str
     triggers: List[str]
+    explanation: str = ""
     timestamp: datetime
 
 # ======================================================
@@ -113,8 +114,25 @@ SCAM_PATTERNS = {
     'suspicious_links': [
         r'bit\.ly|tinyurl|t\.co|goo\.gl',
         r'click.*here|download.*now|open.*link',
-        r'http.*suspicious|shortened.*url',
-    ]
+    ],
+    'email_phishing': [
+        r'dear (customer|user|account holder|valued member)',
+        r'your account has been|we have detected|unusual activity',
+        r'confirm your (identity|account|email|password|details)',
+        r'update your (billing|payment|account) information',
+        r'your (password|account) (will expire|has been compromised)',
+        r'click the link below|follow the link|access your account',
+    ],
+}
+
+EXPLANATION_MAP = {
+    'urgency': 'Uses urgency tactics to pressure you into acting without thinking.',
+    'lottery': 'Claims you won a prize or lottery you never entered — a classic scam.',
+    'otp_phishing': 'Asks for verification codes or PINs — legitimate services never do this.',
+    'financial': 'Requests sensitive financial information like bank details or SSN.',
+    'authority': 'Impersonates government or law enforcement to create fear.',
+    'suspicious_links': 'Contains shortened or suspicious links that hide the real destination.',
+    'email_phishing': 'Uses phishing language common in fake emails impersonating banks or services.',
 }
 
 # ======================================================
@@ -129,6 +147,13 @@ def detect_input_type(content: str) -> str:
     url_pattern = r'^https?://|^www\.|\.com$|\.org$|\.net$'
     if re.search(url_pattern, content, re.IGNORECASE):
         return 'url'
+    # Detect email content
+    email_patterns = [
+        r'subject:|from:|to:|dear (customer|user|sir|madam)',
+        r'unsubscribe|click here to|your account|sincerely|regards',
+    ]
+    if any(re.search(p, content.lower()) for p in email_patterns):
+        return 'email'
     return 'text'
 
 def apply_rule_layer(content: str, scan_type: str) -> tuple:
@@ -145,6 +170,8 @@ def apply_rule_layer(content: str, scan_type: str) -> tuple:
                     score += 35
                 elif category in ['otp_phishing', 'suspicious_links']:
                     score += 25
+                elif category == 'email_phishing':
+                    score += 30
                 triggers.append(f"Rule: {category}")
                 break
 
@@ -168,7 +195,8 @@ def apply_rule_layer(content: str, scan_type: str) -> tuple:
             r'[a-z0-9]{20,}\.',
             r'[0-9]{10,}\.',
         ]
-        legitimate_domains = ['google.com', 'microsoft.com', 'apple.com', 'amazon.com', 'facebook.com', 'youtube.com', 'wikipedia.org']
+        legitimate_domains = ['google.com', 'microsoft.com', 'apple.com', 'amazon.com',
+                              'facebook.com', 'youtube.com', 'wikipedia.org', 'github.com']
         is_legitimate = any(domain in content_clean for domain in legitimate_domains)
         if not is_legitimate:
             for pattern in suspicious_url_patterns:
@@ -203,7 +231,7 @@ async def apply_blacklist_layer(content: str, scan_type: str) -> tuple:
                     if blocked:
                         score += 50
                         triggers.append("Blacklist: known_scam_domain")
-        elif scan_type == 'text':
+        else:
             blocked_messages = await db.blocked_messages.find().to_list(100)
             for blocked_msg in blocked_messages:
                 if blocked_msg['pattern'].lower() in content.lower():
@@ -244,15 +272,61 @@ def calculate_final_score_and_label(rule_score: int, blacklist_score: int, ai_sc
         guidance = "This content is highly likely to be a scam. Do not share personal information, click links, or send money."
     return total_score, label, guidance
 
+def build_explanation(triggers: List[str]) -> str:
+    """Build a human-readable explanation of why content was flagged."""
+    explanations = []
+    for trigger in triggers:
+        for key, explanation in EXPLANATION_MAP.items():
+            if key in trigger.lower():
+                if explanation not in explanations:
+                    explanations.append(explanation)
+    if not explanations:
+        return "No specific scam patterns detected."
+    return " ".join(explanations)
+
+async def run_scan(content: str, scan_type: Optional[str] = None) -> ScanResult:
+    """Core scan logic shared by text and file endpoints."""
+    content = content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Content cannot be empty")
+
+    detected_type = scan_type or detect_input_type(content)
+
+    rule_score, rule_triggers = apply_rule_layer(content, detected_type)
+    blacklist_score, blacklist_triggers = await apply_blacklist_layer(content, detected_type)
+    ai_score, ai_triggers = apply_ai_layer(content)
+
+    total_score, label, guidance = calculate_final_score_and_label(
+        rule_score, blacklist_score, ai_score
+    )
+
+    all_triggers = rule_triggers + blacklist_triggers + ai_triggers
+    explanation = build_explanation(all_triggers)
+
+    result = ScanResult(
+        content=content[:500],  # Truncate long content for storage
+        scan_type=detected_type,
+        risk_score=total_score,
+        label=label,
+        guidance=guidance,
+        triggers=all_triggers,
+        explanation=explanation,
+    )
+
+    try:
+        await db.scan_history.insert_one(result.dict())
+    except Exception as e:
+        logging.error(f"Failed to store scan history: {e}")
+
+    return result
+
 # ======================================================
-# ML Model — trained on 5,574 real SMS messages
-# (UCI SMS Spam Collection Dataset)
+# ML Model
 # ======================================================
 
 async def initialize_ml_model():
     global ml_model, vectorizer
 
-    # Load from disk if already trained
     if MODEL_PATH.exists() and VECTORIZER_PATH.exists():
         try:
             with open(MODEL_PATH, 'rb') as f:
@@ -265,16 +339,13 @@ async def initialize_ml_model():
             logging.warning(f"Could not load saved model, retraining: {e}")
 
     try:
-        # Download the UCI SMS Spam Collection dataset (5,574 messages)
         dataset_url = "https://raw.githubusercontent.com/justmarkham/pycon-2016-tutorial/master/data/sms.tsv"
         dataset_path = ROOT_DIR / "sms_spam.tsv"
 
         if not dataset_path.exists():
             logging.info("Downloading SMS Spam dataset...")
             urllib.request.urlretrieve(dataset_url, dataset_path)
-            logging.info("Dataset downloaded.")
 
-        # Parse the dataset
         texts = []
         labels = []
         with open(dataset_path, 'r', encoding='utf-8') as f:
@@ -287,26 +358,19 @@ async def initialize_ml_model():
 
         logging.info(f"Loaded {len(texts)} messages ({sum(labels)} spam, {len(labels)-sum(labels)} ham)")
 
-        # Train/test split to evaluate accuracy
-        X_train, X_test, y_train, y_test = train_test_split(
-            texts, labels, test_size=0.2, random_state=42
-        )
+        X_train, X_test, y_train, y_test = train_test_split(texts, labels, test_size=0.2, random_state=42)
 
-        # Vectorize
         vectorizer = TfidfVectorizer(max_features=3000, stop_words='english')
         X_train_vec = vectorizer.fit_transform(X_train)
         X_test_vec = vectorizer.transform(X_test)
 
-        # Train
         ml_model = LogisticRegression(random_state=42, max_iter=1000)
         ml_model.fit(X_train_vec, y_train)
 
-        # Evaluate
         y_pred = ml_model.predict(X_test_vec)
         accuracy = accuracy_score(y_test, y_pred)
         logging.info(f"ML model trained. Test accuracy: {accuracy:.2%}")
 
-        # Save to disk so we don't retrain on every restart
         with open(MODEL_PATH, 'wb') as f:
             pickle.dump(ml_model, f)
         with open(VECTORIZER_PATH, 'wb') as f:
@@ -370,50 +434,88 @@ async def seed_database():
 
 @api_router.post("/scan", response_model=ScanResult)
 async def scan_content(request: ScanRequest):
+    """Scan text, URL, phone number, or email content."""
     try:
-        content = request.content.strip()
-        if not content:
-            raise HTTPException(status_code=400, detail="Content cannot be empty")
-
-        scan_type = request.scan_type or detect_input_type(content)
-
-        rule_score, rule_triggers = apply_rule_layer(content, scan_type)
-        blacklist_score, blacklist_triggers = await apply_blacklist_layer(content, scan_type)
-        ai_score, ai_triggers = apply_ai_layer(content)
-
-        total_score, label, guidance = calculate_final_score_and_label(
-            rule_score, blacklist_score, ai_score
-        )
-
-        all_triggers = rule_triggers + blacklist_triggers + ai_triggers
-
-        result = ScanResult(
-            content=content,
-            scan_type=scan_type,
-            risk_score=total_score,
-            label=label,
-            guidance=guidance,
-            triggers=all_triggers
-        )
-
-        try:
-            await db.scan_history.insert_one(result.dict())
-        except Exception as e:
-            logging.error(f"Failed to store scan history: {e}")
-
-        return result
-
+        return await run_scan(request.content, request.scan_type)
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"Scan error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error during scan")
 
+@api_router.post("/scan/file", response_model=ScanResult)
+async def scan_file(file: UploadFile = File(...)):
+    """
+    Scan an uploaded file (.txt, .eml, .csv).
+    Extracts text content and runs it through the detection engine.
+    """
+    try:
+        # Validate file type
+        allowed_types = ['text/plain', 'message/rfc822', 'text/csv', 'application/octet-stream']
+        allowed_extensions = ['.txt', '.eml', '.csv', '.msg']
+        
+        file_ext = os.path.splitext(file.filename or '')[1].lower()
+        if file_ext not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type. Allowed: .txt, .eml, .csv, .msg"
+            )
+
+        # Read file content
+        content_bytes = await file.read()
+        
+        # Limit file size to 1MB
+        if len(content_bytes) > 1_000_000:
+            raise HTTPException(status_code=400, detail="File too large. Maximum size is 1MB.")
+
+        # Decode text
+        try:
+            content = content_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            content = content_bytes.decode('latin-1')
+
+        # For .eml files, extract just the body text
+        if file_ext == '.eml':
+            # Extract subject and body from email
+            lines = content.split('\n')
+            body_lines = []
+            in_body = False
+            subject = ""
+            for line in lines:
+                if line.lower().startswith('subject:'):
+                    subject = line[8:].strip()
+                if line.strip() == '' and not in_body:
+                    in_body = True
+                    continue
+                if in_body:
+                    body_lines.append(line)
+            body = '\n'.join(body_lines).strip()
+            content = f"{subject}\n{body}" if subject else body
+
+        # Truncate to 2000 chars for analysis
+        content = content[:2000].strip()
+
+        if not content:
+            raise HTTPException(status_code=400, detail="Could not extract text from file.")
+
+        return await run_scan(content, 'email' if file_ext == '.eml' else None)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"File scan error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process file.")
+
 @api_router.get("/history", response_model=List[HistoryItem])
 async def get_scan_history():
     try:
         history = await db.scan_history.find().sort("timestamp", -1).limit(10).to_list(10)
-        return [HistoryItem(**item) for item in history]
+        results = []
+        for item in history:
+            if 'explanation' not in item:
+                item['explanation'] = ""
+            results.append(HistoryItem(**item))
+        return results
     except Exception as e:
         logging.error(f"History retrieval error: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve scan history")
@@ -440,7 +542,8 @@ async def health_check():
     return {
         "status": "healthy",
         "ml_model_loaded": ml_model is not None,
-        "training_data": "UCI SMS Spam Collection (5,574 messages)"
+        "training_data": "UCI SMS Spam Collection (5,574 messages)",
+        "supported_scan_types": ["text", "url", "phone", "email", "file"]
     }
 
 # ======================================================
