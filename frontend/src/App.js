@@ -1,29 +1,21 @@
-import React, { useState } from "react";
+import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Navigation from "./components/Navigation";
-import ScannerInput from "./components/ScannerInput";
-import ScanResult from "./components/ScanResult";
+import Scanner from "./components/Scanner";
+import History from "./components/History";
+import Stats from "./components/Stats";
 import "./App.css";
 
 function App() {
-  const [scanResult, setScanResult] = useState(null);
-
-  const handleScan = (result) => {
-    setScanResult(result);
-  };
-
   return (
     <Router>
-      <div className="App">
+      <div className="app">
         <Navigation />
-        <main>
+        <main className="main-content">
           <Routes>
-            <Route path="/" element={
-              <>
-                <ScannerInput onScan={handleScan} />
-                <ScanResult result={scanResult} />
-              </>
-            } />
+            <Route path="/" element={<Scanner />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/stats" element={<Stats />} />
           </Routes>
         </main>
       </div>
