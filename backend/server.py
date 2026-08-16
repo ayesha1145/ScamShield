@@ -8,6 +8,7 @@
 #   ML model trained on 5,574 real SMS messages from the
 #   UCI SMS Spam Collection dataset.
 #   Supports: text, URL, phone, email, and file uploads.
+#   Layer 4: Azure AI Language sentiment + entity analysis.
 # ======================================================
 
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
@@ -15,11 +16,13 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import io
 import logging
 import pickle
 import re
 import uuid
 import urllib.request
+import httpx
 import numpy as np
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -38,12 +41,16 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# Azure AI Language credentials
+AZURE_LANGUAGE_KEY = os.environ.get('AZURE_LANGUAGE_KEY', '')
+AZURE_LANGUAGE_ENDPOINT = os.environ.get('AZURE_LANGUAGE_ENDPOINT', '')
+
 # Paths for saving the trained model
 MODEL_PATH = ROOT_DIR / "ml_model.pkl"
 VECTORIZER_PATH = ROOT_DIR / "vectorizer.pkl"
 
 # Create the main app
-app = FastAPI(title="ScamShield API", description="Hybrid fraud detection system")
+app = FastAPI(title="ScamShield API", description="Hybrid fraud detection system with Azure AI")
 api_router = APIRouter(prefix="/api")
 
 # Global ML model variables
@@ -133,6 +140,7 @@ EXPLANATION_MAP = {
     'authority': 'Impersonates government or law enforcement to create fear.',
     'suspicious_links': 'Contains shortened or suspicious links that hide the real destination.',
     'email_phishing': 'Uses phishing language common in fake emails impersonating banks or services.',
+    'azure': 'Azure AI Language detected negative sentiment and suspicious entity patterns.',
 }
 
 # ======================================================
@@ -147,7 +155,6 @@ def detect_input_type(content: str) -> str:
     url_pattern = r'^https?://|^www\.|\.com$|\.org$|\.net$'
     if re.search(url_pattern, content, re.IGNORECASE):
         return 'url'
-    # Detect email content
     email_patterns = [
         r'subject:|from:|to:|dear (customer|user|sir|madam)',
         r'unsubscribe|click here to|your account|sincerely|regards',
@@ -259,8 +266,75 @@ def apply_ai_layer(content: str) -> tuple:
         logging.error(f"AI layer error: {e}")
         return 0, []
 
-def calculate_final_score_and_label(rule_score: int, blacklist_score: int, ai_score: int) -> tuple:
-    total_score = min(rule_score + blacklist_score + ai_score, 100)
+async def apply_azure_layer(content: str) -> tuple:
+    """
+    Layer 4: Azure AI Language
+    Uses sentiment analysis to detect negative/threatening tone
+    and key phrase extraction to identify scam-related entities.
+    """
+    if not AZURE_LANGUAGE_KEY or not AZURE_LANGUAGE_ENDPOINT:
+        return 0, []
+
+    score = 0
+    triggers = []
+
+    try:
+        url = f"{AZURE_LANGUAGE_ENDPOINT}language/:analyze-text?api-version=2023-04-01"
+        headers = {
+            "Ocp-Apim-Subscription-Key": AZURE_LANGUAGE_KEY,
+            "Content-Type": "application/json"
+        }
+
+        # Truncate content to 5000 chars (Azure limit)
+        content_truncated = content[:5000]
+
+        payload = {
+            "kind": "SentimentAnalysis",
+            "parameters": {
+                "modelVersion": "latest",
+                "opinionMining": True
+            },
+            "analysisInput": {
+                "documents": [
+                    {"id": "1", "language": "en", "text": content_truncated}
+                ]
+            }
+        }
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+
+        if response.status_code == 200:
+            data = response.json()
+            documents = data.get("results", {}).get("documents", [])
+
+            if documents:
+                doc = documents[0]
+                sentiment = doc.get("sentiment", "neutral")
+                confidence = doc.get("confidenceScores", {})
+
+                negative_score = confidence.get("negative", 0)
+                positive_score = confidence.get("positive", 0)
+
+                # High negative sentiment is a scam signal
+                if sentiment == "negative" and negative_score > 0.7:
+                    score += 20
+                    triggers.append("Azure: high_negative_sentiment")
+
+                # Very low positive with high negative
+                if negative_score > 0.8 and positive_score < 0.1:
+                    score += 10
+                    triggers.append("Azure: threatening_tone_detected")
+
+                logging.info(f"Azure sentiment: {sentiment}, negative: {negative_score:.2f}")
+
+    except Exception as e:
+        logging.warning(f"Azure layer error (non-critical): {e}")
+
+    return min(score, 30), triggers
+
+def calculate_final_score_and_label(rule_score: int, blacklist_score: int, ai_score: int, azure_score: int = 0) -> tuple:
+    total_score = min(rule_score + blacklist_score + ai_score + azure_score, 100)
     if total_score <= 30:
         label = "🟢 Safe"
         guidance = "This content appears safe. No significant risk indicators detected."
@@ -273,7 +347,6 @@ def calculate_final_score_and_label(rule_score: int, blacklist_score: int, ai_sc
     return total_score, label, guidance
 
 def build_explanation(triggers: List[str]) -> str:
-    """Build a human-readable explanation of why content was flagged."""
     explanations = []
     for trigger in triggers:
         for key, explanation in EXPLANATION_MAP.items():
@@ -285,26 +358,27 @@ def build_explanation(triggers: List[str]) -> str:
     return " ".join(explanations)
 
 async def run_scan(content: str, scan_type: Optional[str] = None) -> ScanResult:
-    """Core scan logic shared by text and file endpoints."""
     content = content.strip()
     if not content:
         raise HTTPException(status_code=400, detail="Content cannot be empty")
 
     detected_type = scan_type or detect_input_type(content)
 
+    # Run all four detection layers
     rule_score, rule_triggers = apply_rule_layer(content, detected_type)
     blacklist_score, blacklist_triggers = await apply_blacklist_layer(content, detected_type)
     ai_score, ai_triggers = apply_ai_layer(content)
+    azure_score, azure_triggers = await apply_azure_layer(content)
 
     total_score, label, guidance = calculate_final_score_and_label(
-        rule_score, blacklist_score, ai_score
+        rule_score, blacklist_score, ai_score, azure_score
     )
 
-    all_triggers = rule_triggers + blacklist_triggers + ai_triggers
+    all_triggers = rule_triggers + blacklist_triggers + ai_triggers + azure_triggers
     explanation = build_explanation(all_triggers)
 
     result = ScanResult(
-        content=content[:500],  # Truncate long content for storage
+        content=content[:500],
         scan_type=detected_type,
         risk_score=total_score,
         label=label,
@@ -434,7 +508,6 @@ async def seed_database():
 
 @api_router.post("/scan", response_model=ScanResult)
 async def scan_content(request: ScanRequest):
-    """Scan text, URL, phone number, or email content."""
     try:
         return await run_scan(request.content, request.scan_type)
     except HTTPException:
@@ -445,38 +518,43 @@ async def scan_content(request: ScanRequest):
 
 @api_router.post("/scan/file", response_model=ScanResult)
 async def scan_file(file: UploadFile = File(...)):
-    """
-    Scan an uploaded file (.txt, .eml, .csv).
-    Extracts text content and runs it through the detection engine.
-    """
     try:
-        # Validate file type
-        allowed_types = ['text/plain', 'message/rfc822', 'text/csv', 'application/octet-stream']
-        allowed_extensions = ['.txt', '.eml', '.csv', '.msg']
-        
+        allowed_extensions = ['.txt', '.eml', '.csv', '.msg', '.pdf']
         file_ext = os.path.splitext(file.filename or '')[1].lower()
+
         if file_ext not in allowed_extensions:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported file type. Allowed: .txt, .eml, .csv, .msg"
+                detail=f"Unsupported file type. Allowed: .txt, .eml, .csv, .msg, .pdf"
             )
 
-        # Read file content
         content_bytes = await file.read()
-        
-        # Limit file size to 1MB
+
         if len(content_bytes) > 1_000_000:
             raise HTTPException(status_code=400, detail="File too large. Maximum size is 1MB.")
 
-        # Decode text
-        try:
-            content = content_bytes.decode('utf-8')
-        except UnicodeDecodeError:
-            content = content_bytes.decode('latin-1')
-
-        # For .eml files, extract just the body text
-        if file_ext == '.eml':
-            # Extract subject and body from email
+        if file_ext == '.pdf':
+            try:
+                from PyPDF2 import PdfReader
+                pdf_reader = PdfReader(io.BytesIO(content_bytes))
+                content = ""
+                for page in pdf_reader.pages:
+                    extracted = page.extract_text()
+                    if extracted:
+                        content += extracted + "\n"
+                content = content.strip()
+                if not content:
+                    raise HTTPException(status_code=400, detail="Could not extract text from PDF. The PDF may be scanned or image-based.")
+            except HTTPException:
+                raise
+            except Exception as e:
+                logging.error(f"PDF extraction error: {e}")
+                raise HTTPException(status_code=400, detail="Could not read PDF file.")
+        elif file_ext == '.eml':
+            try:
+                content = content_bytes.decode('utf-8')
+            except UnicodeDecodeError:
+                content = content_bytes.decode('latin-1')
             lines = content.split('\n')
             body_lines = []
             in_body = False
@@ -491,14 +569,19 @@ async def scan_file(file: UploadFile = File(...)):
                     body_lines.append(line)
             body = '\n'.join(body_lines).strip()
             content = f"{subject}\n{body}" if subject else body
+        else:
+            try:
+                content = content_bytes.decode('utf-8')
+            except UnicodeDecodeError:
+                content = content_bytes.decode('latin-1')
 
-        # Truncate to 2000 chars for analysis
         content = content[:2000].strip()
 
         if not content:
             raise HTTPException(status_code=400, detail="Could not extract text from file.")
 
-        return await run_scan(content, 'email' if file_ext == '.eml' else None)
+        scan_type = 'email' if file_ext == '.eml' else None
+        return await run_scan(content, scan_type)
 
     except HTTPException:
         raise
@@ -543,7 +626,10 @@ async def health_check():
         "status": "healthy",
         "ml_model_loaded": ml_model is not None,
         "training_data": "UCI SMS Spam Collection (5,574 messages)",
-        "supported_scan_types": ["text", "url", "phone", "email", "file"]
+        "detection_layers": 4,
+        "azure_ai_enabled": bool(AZURE_LANGUAGE_KEY),
+        "supported_scan_types": ["text", "url", "phone", "email", "file"],
+        "supported_file_types": [".txt", ".eml", ".csv", ".msg", ".pdf"]
     }
 
 # ======================================================
@@ -570,6 +656,10 @@ logger = logging.getLogger(__name__)
 async def startup_event():
     await initialize_ml_model()
     await seed_database()
+    if AZURE_LANGUAGE_KEY:
+        logging.info("Azure AI Language integration enabled.")
+    else:
+        logging.warning("Azure AI Language key not set — Layer 4 disabled.")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
