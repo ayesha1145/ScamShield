@@ -44,7 +44,6 @@ export default function Scanner() {
       let response;
 
       if (uploadedFile) {
-        // File upload scan
         const formData = new FormData();
         formData.append("file", uploadedFile);
         response = await fetch(`${CONFIG.API_BASE_URL}/scan/file`, {
@@ -52,7 +51,6 @@ export default function Scanner() {
           body: formData,
         });
       } else {
-        // Text scan
         response = await fetch(`${CONFIG.API_BASE_URL}/scan`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -75,7 +73,7 @@ export default function Scanner() {
   };
 
   const handleFileUpload = (file) => {
-    const allowed = ['.txt', '.eml', '.csv', '.msg'];
+    const allowed = ['.txt', '.eml', '.csv', '.msg', '.pdf'];
     const ext = '.' + file.name.split('.').pop().toLowerCase();
     if (!allowed.includes(ext)) {
       setError(`Unsupported file type. Allowed: ${allowed.join(', ')}`);
@@ -112,20 +110,17 @@ export default function Scanner() {
 
   return (
     <div className="scanner-page">
-      {/* Hero */}
       <div className="scanner-hero">
         <h1 className="scanner-heading">
           Detect scams <span className="accent">instantly.</span>
         </h1>
         <p className="scanner-subheading">
-          Analyze suspicious messages, URLs, phone numbers, emails, or uploaded files 
-          through our three-layer AI detection engine.
+          Analyze suspicious messages, URLs, phone numbers, emails, or uploaded files
+          through our four-layer AI detection engine — powered by Azure AI.
         </p>
       </div>
 
-      {/* Input card */}
       <div className="card scanner-card">
-        {/* Tabs */}
         <div className="tabs-row">
           {TABS.map(tab => (
             <button
@@ -144,7 +139,6 @@ export default function Scanner() {
           </button>
         </div>
 
-        {/* File upload tab */}
         {activeTab === "file" ? (
           <div
             className={`drop-zone ${dragOver ? "drag-over" : ""} ${uploadedFile ? "has-file" : ""}`}
@@ -156,7 +150,7 @@ export default function Scanner() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".txt,.eml,.csv,.msg"
+              accept=".txt,.eml,.csv,.msg,.pdf,application/pdf,text/plain"
               style={{ display: "none" }}
               onChange={(e) => e.target.files[0] && handleFileUpload(e.target.files[0])}
             />
@@ -178,7 +172,7 @@ export default function Scanner() {
               <div className="drop-zone-content">
                 <div className="drop-icon">📁</div>
                 <div className="drop-title">Drop a file here or click to upload</div>
-                <div className="drop-subtitle">Supports .txt, .eml, .csv, .msg — max 1MB</div>
+                <div className="drop-subtitle">Supports .txt, .eml, .csv, .msg, .pdf — max 1MB</div>
               </div>
             )}
           </div>
@@ -218,10 +212,8 @@ export default function Scanner() {
         </button>
       </div>
 
-      {/* Error */}
       {error && <div className="error-banner">⚠️ {error}</div>}
 
-      {/* Result */}
       {result && (
         <div className={`card result-card ${getRiskColor(result.label)}`}>
           <div className="result-header">
@@ -260,7 +252,6 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* How it works */}
       <div className="how-it-works">
         <div className="how-title">How ScamShield works</div>
         <div className="how-steps">
@@ -278,6 +269,11 @@ export default function Scanner() {
             <div className="step-num">03</div>
             <div className="step-name">AI Layer</div>
             <div className="step-desc">ML model trained on 5,574 real SMS messages — 97.2% accuracy</div>
+          </div>
+          <div className="how-step">
+            <div className="step-num">04</div>
+            <div className="step-name">Azure AI</div>
+            <div className="step-desc">Azure AI Language sentiment analysis detects threatening tone and intent</div>
           </div>
         </div>
       </div>
