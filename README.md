@@ -8,6 +8,22 @@ ScamShield uses a four-layer hybrid detection engine to identify scams in real t
 
 ---
 
+## Screenshots
+
+![Scanner](screenshots/scanner.png)
+*Scanner with 5 scan types including file upload*
+
+![Dangerous Detection](screenshots/dangerous-result.png)
+*Email scam detected — 87/100 risk score*
+
+![Stats](screenshots/stats.png)
+*Live statistics dashboard*
+
+![File Upload](screenshots/file-upload.png)
+*PDF file upload and scanning*
+
+---
+
 ## Why ScamShield
 
 Scam messages targeting students and newcomers are increasingly sophisticated. Existing tools require apps or subscriptions. ScamShield is free, instant, and works on any device — paste a message, URL, email, or upload a file and get a risk score in under 200ms.
@@ -195,3 +211,4 @@ This integration demonstrates Microsoft Azure ecosystem experience and adds a cl
 
 **Ayesha Habib** — University of Manitoba  
 [GitHub](https://github.com/ayesha1145) | [Live Demo](https://scam-shield-beta.vercel.app)
+
